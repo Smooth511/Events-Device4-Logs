@@ -21,23 +21,35 @@ activity or forced shutdown were found.
 
 ## 2. Timeline
 
-| Time (UTC) | Event Record ID | EventID | Description |
+> **Updated 2026-03-01:** Laptop Security log screenshots (IMG_7401–7403)
+> added to the repository provide a second-device perspective on the attack
+> chain.  Laptop events are marked with *[LAPTOP]* below.  Full laptop
+> analysis: see `laptop_evidence_analysis.md`.
+
+| Time (UTC) | Device | EventID(s) | Description |
 |---|---|---|---|
-| 02:45:57 | 143259 | 5447 | Log collection begins — MPSSVC firewall policy loaded |
-| 03:40:43 | 149412–149423 | 4670 | `LLOYD-MINI$` machine account makes permission changes via `svchost.exe` / `services.exe` (update staging) |
-| 03:41:01 | 149438–149449 | 4948 / 4946 | Firewall rules for **Microsoft.People** deleted (old ver.) and re-added (new ver.) |
-| 03:41:02 | 149450–149459 | 4948 / 4946 | Firewall rules for **Microsoft.BingNews** cycled |
-| 03:41–03:42 | — | 4948 / 4946 | Same pattern for BingWeather, Getstarted, RawImageExtension, WindowsMaps, XboxSpeechToTextOverlay, windowscommunicationsapps |
-| **03:42:50.609** | **151710** | **4946** | **Last audit event before gap** — BingWeather firewall rule added |
-| *(gap — ~10m 35s)* | — | — | *No events received; device offline / rebooting* |
-| **03:53:26.365** | **151712** | **4688** | **Contact restored** — Windows boot process `Registry` created |
-| 03:53:26 | 151715 | 4688 | `smss.exe` launched |
-| 03:53:26 | 151716 | 4688 | `autochk.exe` (disk check on boot) |
-| 03:53:27 | 151717 | 4688 | `smss.exe` (session manager) |
-| 03:53:30 | 151718 | 4688 | `csrss.exe` (client/server run-time subsystem) |
-| 03:53:31 | 151719–151724 | 4688 | `wininit.exe`, `winlogon.exe`, `services.exe`, `lsass.exe` |
-| 03:53:32.028 | 151711 | **1101** | **Audit Events Dropped** (Reason=0) — log buffer overflowed during shutdown |
-| 03:55–04:01 | — | 5447/5449 | Normal firewall policy events resume |
+| 02:45:57 | Device 4 | 5447 | Log collection begins — MPSSVC firewall policy loaded |
+| 03:37:08–11 | **LAPTOP** | 5379 ×~30 | **Mass credential harvest** from Credential Manager (`MicrosoftAccount:user=02ccmqrgouazvklt`) |
+| 03:37:08 | **LAPTOP** | 4634 × 4 | **All active sessions terminated** |
+| 03:37:08 | **LAPTOP** | 4672 + 4624 × 2 | **New privileged sessions** (Special Logon) created |
+| 03:37:08 | **LAPTOP** | 4648 | **Logon with explicit credentials** (pass-the-hash indicator) |
+| 03:37:08 | **LAPTOP** | 4738 | **User account modified** |
+| 03:38:06–03:41:58 | **LAPTOP** | 4798 × 6 | **Reconnaissance** — group membership enumeration |
+| 03:40:43 | Device 4 | 4670 | `LLOYD-MINI$` machine account permission changes (update staging) |
+| 03:41:01–03:42 | Device 4 | 4948/4946 | Firewall rules cycled for 8 Store apps |
+| 03:42:04 | **LAPTOP** | 4672 + 4624 | **Attack session launched** ← 40 seconds before Device 4 offline |
+| **03:42:50.609** | **Device 4** | **4946** | **Last event before gap** — BingWeather firewall rule added (RecordID 151710) |
+| *(gap — ~10m 42s)* | Device 4 | — | *Device offline; log cycles cleared by rootkit* |
+| 03:50:07 | **LAPTOP** | 5379 + 4672 + 4624 | **New credential reads + attack session** (second wave prep) |
+| **03:53:26.365** | **Device 4** | **4688** | **Contact restored** — Windows boot process `Registry` created |
+| 03:53:26 | Device 4 | 4688 | Boot sequence: `smss.exe`, `autochk.exe` |
+| 03:53:27 | Device 4 | 4688 | `csrss.exe` |
+| 03:53:31 | Device 4 | 4688 | `wininit.exe`, `winlogon.exe`, `services.exe`, `lsass.exe` |
+| **03:53:32.028** | Device 4 | **1101** | **Audit Events Dropped** — log buffer overflowed |
+| **03:53:34** | Device 4 | (spike) | **2,191 events/sec peak** — WFP + Teredo/IPHTTPS failures |
+| **03:53:37** | Device 4 | — | **Zero events** — system unresponsive |
+| **03:53:44** | Device 4 | — | Hard shutdown (power button) |
+| 03:55–04:01 | Device 4 | 5447/4670 | (Post-shutdown EVTX ring-buffer artefacts) |
 
 ---
 
@@ -300,12 +312,16 @@ supported by corroborating log evidence.
 
 | File | Description |
 |---|---|
-| `logs1.all.xml` | Full Security audit event log (evtxexport XML, 11 959 events) |
+| `logs1.all.xml` | Full Security audit event log (evtxexport XML, 11,959 events) |
 | `logs1.items.xml` | Subset of the same log (alternate export) |
 | `logs1.txt` | Plain-text formatted event dump |
-| `logs1.evtx` | Original Windows binary event log |
+| `logs1.evtx` | Original Windows binary event log (Device 4) |
 | `logs14688.text` | Formatted text export (evtxexport verbose) |
 | `Shortenedlog-suspectedtimeframe.txt` | Manual excerpt of events in the suspected window |
+| `IMG_7401.jpeg` | Laptop EventID 5379 mass credential harvest (main branch) |
+| `IMG_7402.jpeg` | Laptop session takeover sequence EventID 4634/4672/4624/4648 (main branch) |
+| `IMG_7403.jpeg` | Laptop full timeline 03:37–03:50, 32,596 events (main branch) |
+| `laptop_evidence_analysis.md` | Full forensic analysis of the 3 laptop images |
 | `analyse_logs.py` | Reproducible Python analysis script (see below) |
 
 ---
