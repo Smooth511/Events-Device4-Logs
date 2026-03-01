@@ -160,7 +160,7 @@ The S-1-0 SIDs I identified were a red herring — normal post-boot browser acti
 
 ## RECOMMENDATIONS
 
-1. **Alert tuning** — Consider suppressing or down-prioritizing loss-of-contact alerts during the established Windows Update maintenance window for `Lloyd-Mini` to reduce alert fatigue.
+1. **Alert tuning** — Consider establishing a Windows Update maintenance window for `Lloyd-Mini` and suppressing or down-prioritizing loss-of-contact alerts during that window to reduce alert fatigue.
 
 2. **Maintenance window documentation** — Document the expected reboot window so the monitoring team can correlate future gaps against it quickly.
 
