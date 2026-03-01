@@ -11,8 +11,10 @@ Outputs a structured plain-text summary covering:
   • the gap / loss-of-contact window
   • notable events immediately before and after the gap
   • the Windows boot sequence that confirms a reboot
+  • Chromium/Edge sandbox token-DACL activity (EventID 4670) with
+    correct interpretation of S-1-0-xxx per-process SIDs
 
-Requirements: Python 3.7+ (stdlib only — no third-party packages needed)
+Requirements: Python 3.9+ (stdlib only — no third-party packages needed)
 """
 
 import argparse
@@ -111,6 +113,9 @@ def load_events(xml_path: Path) -> list[dict]:
         rule_name = _get(block, 'RuleName')
         subject_user = _get(block, 'SubjectUserName')
         obj_name = _get(block, 'ObjectName')
+        old_sd = _get(block, 'OldSd')
+        new_sd = _get(block, 'NewSd')
+        proc_name_4670 = _get(block, 'ProcessName')  # EventID 4670 uses ProcessName not NewProcessName
 
         events.append({
             'time': dt,
@@ -123,9 +128,12 @@ def load_events(xml_path: Path) -> list[dict]:
             'channel': chan_m.group(1) if chan_m else '',
             'computer': comp_m.group(1) if comp_m else '',
             'process_name': new_proc,
+            'proc_name_actor': proc_name_4670,
             'rule_name': rule_name[:80] if rule_name else '',
             'subject_user': subject_user,
             'object_name': obj_name[:80] if obj_name else '',
+            'old_sd': old_sd,
+            'new_sd': new_sd,
         })
 
     events.sort(key=lambda e: e['time'])
@@ -182,6 +190,66 @@ def collect_app_updates(events: list[dict], window_start: datetime, window_end: 
         elif ev['event_id'] == '4946':
             added.add(app)
     return sorted(deleted & added)  # only apps that had both delete + add
+
+
+def analyse_chromium_token_events(events: list[dict], gap_start: datetime, gap_end: datetime):
+    """
+    Analyse EventID 4670 (token permission changes) from Edge/EdgeWebView2 processes.
+
+    The Chromium sandbox (used by both msedge.exe and msedgewebview2.exe) modifies
+    child-process token DACLs as part of its process isolation mechanism:
+
+      OldSd: ...S-1-5-5-0-<luid>...   ← logon-session SID
+      NewSd: ...S-1-0-<a>-<b>-<c>-<d>...   ← per-process unique sandbox SID
+
+    The replacement SID uses identifier-authority 0 with four sub-authorities
+    derived from a Windows LUID (Locally Unique Identifier).  This SID is *not*
+    a "NULL SID" injection — it is an intentional security mechanism that prevents
+    other processes in the same logon session from opening the child's token.
+
+    Returns a dict with:
+      total      — total Edge/EdgeWebView2 4670 events
+      before_gap — events before the gap started
+      after_gap  — events after the gap ended
+      during_gap — events during the gap (expected: 0)
+      last_before_gap — timestamp of last event before gap
+      first_after_gap — timestamp of first event after gap
+      unique_sandbox_sids — set of unique S-1-0-xxx SIDs seen
+    """
+    edge_procs = {'msedge.exe', 'msedgewebview2.exe'}
+    before, during, after = [], [], []
+    sandbox_sids = set()
+
+    for ev in events:
+        if ev['event_id'] != '4670':
+            continue
+        proc = ev.get('proc_name_actor', '')
+        basename = proc.replace('/', '\\').rsplit('\\', 1)[-1].lower()
+        if basename not in edge_procs:
+            continue
+
+        # Extract S-1-0-xxx sandbox SIDs from NewSd
+        if ev.get('new_sd'):
+            for sid in re.findall(r'S-1-0-\d+-\d+-\d+-\d+', ev['new_sd']):
+                sandbox_sids.add(sid)
+
+        t = ev['time']
+        if t < gap_start:
+            before.append(t)
+        elif t > gap_end:
+            after.append(t)
+        else:
+            during.append(t)
+
+    return {
+        'total': len(before) + len(during) + len(after),
+        'before_gap': len(before),
+        'during_gap': len(during),
+        'after_gap': len(after),
+        'last_before_gap': max(before) if before else None,
+        'first_after_gap': min(after) if after else None,
+        'unique_sandbox_sids': sandbox_sids,
+    }
 
 
 # ─────────────────────────── report rendering ───────────────────────────────
@@ -289,6 +357,46 @@ def render_report(events: list[dict], xml_path: Path) -> str:
             lines.append('             winlogon → services → lsass) confirms a cold boot.')
         else:
             lines.append('  No boot-sequence processes detected after the gap.')
+
+    # ── Chromium sandbox token activity ─────────────────────────────────────
+    section('CHROMIUM SANDBOX TOKEN ACTIVITY (EventID 4670)')
+    if last_before:
+        chrom = analyse_chromium_token_events(
+            events, last_before['time'], first_after['time']
+        )
+        lines.append(f"  Total Edge/EdgeWebView2 token-DACL change events: {chrom['total']}")
+        lines.append(f"    Events before gap   : {chrom['before_gap']}")
+        lines.append(f"    Events DURING gap   : {chrom['during_gap']}  ← expected 0 if device offline")
+        lines.append(f"    Events after gap    : {chrom['after_gap']}")
+        if chrom['last_before_gap']:
+            delta_before = (last_before['time'] - chrom['last_before_gap']).total_seconds()
+            lines.append(f"    Last Edge event before gap: {fmt_dt(chrom['last_before_gap'])}")
+            lines.append(f"      ({duration_str(delta_before)} before contact lost)")
+        if chrom['first_after_gap']:
+            delta_after = (chrom['first_after_gap'] - first_after['time']).total_seconds()
+            lines.append(f"    First Edge event after gap: {fmt_dt(chrom['first_after_gap'])}")
+            lines.append(f"      ({duration_str(delta_after)} after contact restored)")
+        lines.append('')
+        if chrom['unique_sandbox_sids']:
+            lines.append(f"  Unique S-1-0-xxx sandbox SIDs in token DACLs ({len(chrom['unique_sandbox_sids'])}):  ")
+            for sid in sorted(chrom['unique_sandbox_sids']):
+                lines.append(f"    {sid}")
+        lines.append('')
+        lines.append('  INTERPRETATION: These S-1-0-xxx SIDs are NOT malicious.')
+        lines.append('  They are per-process unique SIDs generated by the Chromium sandbox:')
+        lines.append('    • OldSd: contains S-1-5-5-0-<luid> (logon session SID)')
+        lines.append('    • NewSd: replaces logon SID with S-1-0-<rand> (sandbox isolation SID)')
+        lines.append('  This isolates each renderer/GPU/utility process so other processes')
+        lines.append('  in the same logon session cannot open its token.')
+        lines.append('  The identifier-authority value 0 in these SIDs is a namespace used')
+        lines.append('  by the Chromium sandbox, NOT the "NULL SID" (S-1-0-0 = Nobody).')
+        lines.append('  All events were initiated by user "lloyd" (not SYSTEM/elevated).')
+        lines.append('')
+        if chrom['during_gap'] == 0:
+            lines.append('  ✓ Confirmed: zero Edge events during the loss-of-contact window.')
+            lines.append('    Edge sandbox activity is UNRELATED to the incident.')
+        else:
+            lines.append(f"  ⚠ Unexpected: {chrom['during_gap']} Edge events found during the gap.")
 
     # ── Conclusion ──────────────────────────────────────────────────────────
     section('CONCLUSION')

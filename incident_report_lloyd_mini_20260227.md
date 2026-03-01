@@ -109,6 +109,44 @@ EventID 6006 ("The event log service was stopped") are both in the *System*
 channel, which is **not** present in this Security-channel log export. Their
 absence here is expected and does not imply a forced or unexpected shutdown.
 
+### 3.5 Microsoft Edge / EdgeWebView2 Chromium Sandbox Activity (Normal)
+
+The log contains 146 EventID 4670 events from `msedge.exe` and
+`msedgewebview2.exe` where the token DACL of a child process is modified.
+These involve SIDs of the form `S-1-0-<a>-<b>-<c>-<d>`:
+
+```
+Example OldSd: D:(A;;GA;;;S-1-5-21-…-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-354768)
+Example NewSd: D:(A;;GA;;;S-1-0-113147267-1519095794-715387272-2850185809)
+               (A;;RC;;;OW)(A;;GA;;;S-1-5-21-…-1001)(A;;GA;;;SY)
+```
+
+**These are NOT malicious.** This is the [Chromium process sandbox][1]
+mechanism for token isolation:
+
+- The browser process calls `CreateRestrictedToken()` on each renderer/GPU
+  child process and modifies the token DACL.
+- The logon session SID (`S-1-5-5-0-354768`) is removed and replaced with a
+  per-process unique SID generated from a Windows LUID.
+- The resulting SID uses identifier-authority `0` with four sub-authorities.
+  This is **not** the "NULL SID" (`S-1-0-0` / "Nobody"); it is an
+  intentionally generated opaque SID in a private namespace used solely for
+  sandbox process isolation.
+- All events were initiated by user account **`lloyd`** (RID 1001), a
+  standard, non-elevated user. No privilege escalation is present.
+
+**Timing conclusively rules out any causal link to the incident:**
+
+| | Time | Relationship to gap |
+|---|---|---|
+| Last Edge event **before** gap | 03:35:15 UTC | **7 min 35 s before** contact lost |
+| Contact lost | 03:42:50 UTC | — |
+| Contact restored (first boot event) | 03:53:26 UTC | — |
+| First Edge event **after** gap | 03:53:52 UTC | 26 s after contact restored |
+| Edge events **during** gap | **0** | Device was offline/rebooting |
+
+[1]: https://chromium.googlesource.com/chromium/src/+/main/docs/design/sandbox.md
+
 ---
 
 ## 4. Conclusion
@@ -120,8 +158,9 @@ absence here is expected and does not imply a forced or unexpected shutdown.
 | When did the device come back online? | 2026-02-27 03:53:26 UTC |
 | How long was the device offline? | 10 minutes 35 seconds |
 | Was the reboot planned / expected? | Yes — Windows Store batch update |
-| Any malicious activity detected? | None |
+| Any malicious activity detected? | **None** |
 | Was a user logged on at shutdown? | No user logon events found |
+| Is Edge/EdgeWebView2 involved? | No — 0 events during gap; normal sandbox activity |
 
 ---
 
@@ -161,7 +200,7 @@ absence here is expected and does not imply a forced or unexpected shutdown.
 
 ## 7. Reproducibility
 
-The analysis can be reproduced on any system with Python 3.7+ (no third-party
+The analysis can be reproduced on any system with Python 3.9+ (no third-party
 packages required):
 
 ```bash
