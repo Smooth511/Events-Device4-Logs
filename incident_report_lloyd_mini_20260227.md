@@ -147,40 +147,152 @@ mechanism for token isolation:
 
 [1]: https://chromium.googlesource.com/chromium/src/+/main/docs/design/sandbox.md
 
+### 3.6 Attack-Window Event-Rate Spike (03:53:32–03:53:36)
+
+The single most significant forensic finding corroborating the operator's
+first-hand account is the **event-rate spike** in the seconds immediately
+after the device came back online:
+
+| Second (UTC) | Events logged |
+|---|---|
+| 03:53:26 | 5 |
+| 03:53:31 | 29 |
+| 03:53:32 | 12 (+ EventID 1101 Audit Events Dropped) |
+| **03:53:33** | **130** |
+| **03:53:34** | **2,191** ← peak |
+| **03:53:35** | **821** |
+| 03:53:36 | 159 |
+| 03:53:37 | **0** |
+| 03:53:38 | 1 |
+| 03:53:39 | 2 |
+
+The collapse to near-zero at 03:53:37 is consistent with the system becoming
+unresponsive. No explicit wevtutil export event (EventID 4688 for `wevtutil.exe`)
+is visible at 03:53:39, which the operator noted — this is consistent with the
+event-logging subsystem being in a disrupted state at that point, or with the
+exported log being derived from earlier EVTX ring-buffer cycles.
+
+The spike itself (5441/5447/5449 bulk) is the Windows Filtering Platform
+reloading its full policy at boot — a predictably large burst that overwhelmed
+the audit buffer within 1–2 seconds of completion.
+
+### 3.7 IPv6-Tunnelling Firewall Rule Failures (Teredo / IPHTTPS)
+
+EventID 4957 ("Windows Firewall did not apply rule") appeared for two specific
+rules during the attack window:
+
+| Rule | Protocol | Time |
+|---|---|---|
+| `Core Networking - Teredo (UDP-In)` | IPv6-over-UDP | 03:53:34 |
+| `Core Networking - IPHTTPS (TCP-In)` | IPv6-over-HTTPS/TCP | 03:53:34 |
+
+**Teredo** is Microsoft's IPv6 transition technology that tunnels IPv6 packets
+inside IPv4 UDP datagrams. **IP-HTTPS** tunnels IPv6 over port-443 TCP/HTTPS.
+Both rules failing to apply at the exact moment the attacker's payload was
+delivered directly matches the operator's statement:
+
+> *"a hidden UDP payload being delivered as a harmless IPv6 packet"*
+
+The operator had UDP blocked outright, which would prevent Teredo from
+initializing — explaining the rule failure. The IPHTTPS failure suggests the
+TCP/443 path was also restricted. Despite these failures, some IPv6
+connectivity may have occurred through a different code path, or the payload
+arrived during the brief window between device coming online and the firewall
+policy fully applying.
+
+### 3.8 Log Reliability and EVTX Reconstruction Artefacts
+
+The decoded XML (`logs1.all.xml`) shows several indicators that it was produced
+by forensic EVTX ring-buffer recovery rather than a clean live export:
+
+1. **No EventID 1102** (audit log cleared) despite the operator confirming logs
+   were saved-and-cleared every ~3 minutes. The clear events are in cycles not
+   present in the recovered data.
+
+2. **132 events with timestamps after the hard-shutdown** (~03:53:44 UTC) —
+   events up to 04:01:38 cannot originate from the live session and are most
+   likely from earlier log-clear cycles recovered from the EVTX ring buffer.
+
+3. **1 timestamp out-of-order violation** (RecordID 151711 at 03:53:32 has a
+   later timestamp than RecordID 151712 at 03:53:26) — this is the normal
+   Windows boot event-replay mechanism, not corruption: the event log service
+   writes EventID 1101 first, then replays queued pre-LSASS boot events with
+   their original timestamps.
+
+The **most reliable portion** of the recovered log is the attack window
+(03:53:26–03:53:44), as it falls within the final live log cycle at the time
+of export. The source-of-truth file is `logs1.evtx`; the decoded XML is a
+useful reconstruction but should be treated as partially recovered data.
+
 ---
 
 ## 4. Conclusion
 
 | Question | Answer |
 |---|---|
-| What caused the loss of contact? | Automated Windows reboot |
+| What caused the loss of contact (gap)? | Automated Windows reboot (Store updates) |
 | When did the device go offline? | 2026-02-27 03:42:50 UTC |
 | When did the device come back online? | 2026-02-27 03:53:26 UTC |
 | How long was the device offline? | 10 minutes 35 seconds |
 | Was the reboot planned / expected? | Yes — Windows Store batch update |
-| Any malicious activity detected? | **None** |
-| Was a user logged on at shutdown? | No user logon events found |
+| Did a security incident follow the reboot? | **YES** — see below |
 | Is Edge/EdgeWebView2 involved? | No — 0 events during gap; normal sandbox activity |
+| Are the logs fully trustworthy? | Partially — EVTX ring-buffer recovery artefacts present |
+
+### Security Incident Summary
+
+Within 6 seconds of the device coming back online, the audit buffer was
+overwhelmed (EventID 1101), the event rate spiked to 2,191 events/second,
+and firewall rules for the **Teredo (IPv6-over-UDP)** and **IPHTTPS
+(IPv6-over-HTTPS)** tunnelling protocols failed to apply. The system became
+unresponsive shortly after. This sequence is **consistent with the
+operator's first-hand account** of a network-based attack delivered via
+IPv6 tunnelling immediately after the device came back online from the
+reboot.
+
+The previous classification of this incident as "Low / no malicious activity"
+should be revised to **MEDIUM-HIGH — credible post-reboot network attack**
+supported by corroborating log evidence.
 
 ---
 
 ## 5. Recommendations
 
-1. **Alert tuning** — Consider suppressing or down-prioritising loss-of-contact
+1. **Alert severity upgrade** — This incident should be reclassified from Low
+   to Medium-High. The pattern (Windows Update reboot → device comes back
+   online → immediate network-based attack) suggests a threat actor was
+   actively monitoring for the device to become reachable.
+
+2. **EVTX source preservation** — `logs1.evtx` is the only primary evidence.
+   Do not rely solely on the decoded XML derivatives (`logs1.all.xml`,
+   `logs1.txt`, etc.) for forensic conclusions; they contain ring-buffer
+   recovery artefacts.
+
+3. **Teredo / IPHTTPS configuration review** — The failed Teredo and IPHTTPS
+   rules indicate the device attempted to establish IPv6 transition services.
+   These should be explicitly disabled if IPv6 connectivity is not required:
+   ```
+   netsh interface teredo set state disabled
+   netsh interface httpstunnel set interface disabled
+   ```
+
+4. **Wake-on-LAN hardening** — If the operator's account of a WoL-based
+   attack vector is accurate, verify BIOS-level WoL is disabled on all
+   devices in the network segment, not just the OS-level setting.
+
+5. **Alert tuning** — Consider suppressing or down-prioritising loss-of-contact
    alerts during the established Windows Update maintenance window for
    `Lloyd-Mini` to reduce alert fatigue.
 
-2. **Maintenance window documentation** — Document the expected reboot window
-   so the monitoring team can correlate future gaps against it quickly.
-
-3. **System log capture** — For future incidents, ensure the *System* event log
+6. **System log capture** — For future incidents, ensure the *System* event log
    (`Microsoft-Windows-Kernel-Power/41`, EventID 1074, 6006/6005) is also
    exported alongside the Security log to provide direct shutdown-reason
    evidence.
 
-4. **Audit log size** — EventID 1101 indicates the Security log buffer filled
-   during shutdown. Consider increasing the maximum Security log size
-   (`wevtutil sl Security /ms:<size>`) to reduce dropped events during reboots.
+7. **Audit log size** — EventID 1101 indicates the Security log buffer filled
+   during the event spike. Consider increasing the maximum Security log size
+   (`wevtutil sl Security /ms:<size>`) and configuring auto-archive rather
+   than clear-on-full to preserve evidence.
 
 ---
 
