@@ -39,10 +39,10 @@ The local administrator present on Device 4 has provided the following account:
 2. TCP was throttled to **10 KB/s**, UDP was **blocked entirely**
 3. Security logs were locked at **20 MB**, being saved and cleared every **~3 minutes** (~35,000-40,000 events each)
 4. At **03:53:32 UTC**, an **IPv6 challenge** appeared in the event log
-5. Within **1 second**, logs were overwhelmed
+5. Logs immediately began filling at an accelerated rate (reaching max size every ~3 seconds vs. normal ~3 minutes)
 6. A **hidden UDP payload** was delivered disguised as an IPv6 packet
-7. An **export was initiated at 03:53:39 UTC**
-8. Within **9 seconds**, complete systems failure — loss of all UI and consoles
+7. An **export was initiated at 03:53:39 UTC** (~7 seconds after challenge)
+8. Within **9 seconds of the challenge**, complete systems failure — loss of all UI and consoles
 9. An **abort order** was issued at **03:53:44 UTC**
 10. Systems were **compromised**, corruption detected in drives
 11. **Hard power button shutdown** (system unresponsive)
@@ -96,7 +96,7 @@ The 10-minute gap is **NOT** a reboot. It represents:
 | 03:43-03:52 | **MISSING DATA** — Device running, logs every 3 seconds | Gap in logs |
 | ~03:51 | Earliest logs should appear | Admin account |
 | **03:53:32** | **IPv6 challenge observed** | Event 1101 timestamp |
-| 03:53:32+ | Logs overwhelmed (filling every 3 seconds) | Admin account |
+| 03:53:32+ | Logs filling at accelerated rate (max size every ~3 seconds) | Admin account |
 | **03:53:39** | Export initiated | Admin account (no log event) |
 | **03:53:44** | Abort order issued | Admin account |
 | 03:53:45 | Complete systems failure (UI/console loss) | Admin account |
