@@ -232,10 +232,10 @@ This is abnormally large for a Local Settings folder. Normal Windows 10/11 Local
 
 This screenshot shows the App Installer file association settings (`Apps > Default apps > App Installer`) on what appears to be **a different device** from the laptop. The signed-in account visible in the navigation sidebar shows:
 - Username: **etcher**
-- Email: **cher@icloud.com** (Apple iCloud account)
+- Email: **[redacted iCloud email address]** (Apple iCloud account)
 
 Key observations:
-1. The iCloud account `cher@icloud.com` links this device to the Apple ecosystem. This is either:
+1. The iCloud account **[redacted iCloud email address]** links this device to the Apple ecosystem. This is either:
    - The same operator (lloyd) using an Apple/iCloud account on a Windows device
    - A different person's device on the network
 2. The username "etcher" — **Balena Etcher** is a popular tool for flashing OS images to USB drives. The operator mentioned booting from USB after the incident. The username could be coincidental or could indicate a device primarily used for OS image flashing and recovery.
