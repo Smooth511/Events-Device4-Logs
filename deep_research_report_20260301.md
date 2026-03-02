@@ -245,10 +245,7 @@ This image likely shows one of the other 3 compromised devices in the network â€
 
 ### IMG_7412, 7413, 7414
 
-These three images were included in the same commit ("More pics") but I was not able to view them in this session. Based on context, they likely show:
-- Additional forensic screenshots of the compromised devices
-- Evidence from the other 3 network devices
-- BIOS-level Wake-on-LAN configuration or similar evidence
+These three images were included in the same commit ("More pics"), but I was not able to view them in this session. As a result, they were not analyzed, and no findings in this report are derived from these images.
 
 ---
 
