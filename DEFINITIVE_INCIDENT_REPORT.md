@@ -552,7 +552,7 @@ DATE/TIME (UTC)        DEVICE      SOURCE          EVENT
 | USB boot by 03:55 | WinPE machine (MININT-SVK1OH1) activity today; post-shutdown 4957 at 03:55:39 | IMG_7414 + logs | ✓ **Corroborated** |
 | No intended reboot before incident | Reboot triggered by automated Store update, not operator | logs1.all.xml | ✓ **Confirmed (automated)** |
 | All 4 devices infected by rootkit | Rootkit still active on laptop 3 days later; WAN Miniport IPv6 reinstalled today | IMG_7403/7408 | ✓ **Confirmed on laptop; unverified on others** |
-| Laptop woke and challenged Device 4 | Laptop 03:42:04 attack session → Device 4 offline 03:42:44 | IMG_7403 + logs | ✓ **Confirmed** |
+| Laptop woke and challenged Device 4 | Laptop 03:42:04 attack session → Device 4 offline 03:42:50 | IMG_7403 + logs | ✓ **Confirmed** |
 | Wake-on-LAN used to wake laptop | No boot events before 03:37 in laptop log; WoL re-enable at BIOS possible via rootkit | Absence of evidence | ⚠ **Consistent, unproven** |
 | Credential theft on devices | ~30× EventID 5379 burst at 03:37:08 (Mimikatz-pattern) | IMG_7401 | ✓ **Confirmed** |
 | Persistent rootkit | "(!) New events" on laptop + MSRRAS IPv6 reinstalled today | IMG_7403/7408 | ✓ **Confirmed** |
