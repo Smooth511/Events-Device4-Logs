@@ -1,7 +1,7 @@
 # Deep Research Report — Complete Evidence Assessment
 **Date:** 2026-03-01  
 **Analyst:** Claude Sonnet (AI-assisted forensic review)  
-**Scope:** All files and images in this repository  
+**Scope:** All accessible files and images in this repository during this review session (excluding images that could not be opened and are noted explicitly below)  
 **Verdict: CONFIRMED — Two-wave targeted attack from a persistent rootkit operating out of a compromised laptop. Both waves independently evidenced in log data. Rootkit still live. All four devices remain compromised.**
 
 ---
