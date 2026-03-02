@@ -476,7 +476,7 @@ DATE/TIME (UTC)        DEVICE      SOURCE          EVENT
                                                    Credential Manager (MicrosoftAccount:user=02ccmqrgouazvklt)
                                                    4634×4 — all active sessions terminated
                                                    4672 + 4624×2 — new privileged sessions (Special Logon)
-                                                   4648 — logon with explicit credentials (pass-the-hash)
+                                                   4648 — logon with explicit credentials (possible credential re-use / PTH)
                                                    4738 — user account modified (persistence)
 
 ──── ATTACK PHASE 2: RECONNAISSANCE ────────────────────────────────────────────────────────────────
